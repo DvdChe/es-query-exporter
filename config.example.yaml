@@ -1,0 +1,57 @@
+exporter:
+  port: 9108
+  refresh: 60
+  loglevel: critical
+
+requests:
+  - http_requests_error_count_5xx:
+      server: "my.elk.com:9200"
+      index: "<logstash-{now/d{yyyy.MM.dd}}>"
+      action: count
+      body:
+        {
+          "query": {
+            "bool": {
+              "must": [
+                  {"match": {"type": "nginx"}},
+                  {"prefix": {"nginx.status": "5"}}
+                ]
+            }
+          }
+        }
+  - http_requests_error_count_4xx: 
+      server: "my.elk.com:9200"
+      index: "<logstash-{now/d{yyyy.MM.dd}}>"
+      action: count
+      body:
+        {
+          "query": {
+            "bool": {
+              "must": [
+                  {"match": {"type": "nginx"}},
+                  {"prefix": {"nginx.status": "4"}}
+                ]
+            }
+          }
+        }
+
+metrics:
+  - http_requests_error_count:
+      description: "amount of http errors"
+      sources: 
+      - http_requests_error_count_5xx:
+          export: count
+          labels:
+            app: nginx
+            status_code: 5xx
+      - http_requests_error_count_4xx:
+          export: count
+          labels:
+            app: nginx
+            status_code: 4xx
+  - other_metric:
+      description: test
+      sources:
+      - http_requests_error_count_4xx:
+          export: _shards.total
+
