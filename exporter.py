@@ -104,8 +104,8 @@ class es_query_exporter:
                         "Created unlabelled metric gauge %s" % (metric_name)
                     )
 
-    def __set_labelled_metric(self, metric_name: str, source_list: dict):
-        for source in source_list:
+    def __set_labelled_metric(self, metric_name: str, sources: dict):
+        for source in sources:
             for source_name, source_param in source.items():
                 export_path = self.__get_export_path(source_param["export"])
                 try:
