@@ -31,6 +31,12 @@ def shutdown():
 
 class es_query_exporter:
     def __init__(self, config: dict):
+        """
+        self.cfg : dict of global config
+        self.gauge_dict : dict containing gauge created
+        self.req_dict: dict containing es query responses
+        self.logger : object logger from lib
+        """
         self.cfg = config
         self.gauge_dict = {}
         self.req_dict = {}
@@ -38,7 +44,11 @@ class es_query_exporter:
 
         self.__prepare_logs()
 
-    def __get_export_path(self, export_str: str):
+    def __get_export_path(self, export_str: str) -> list:
+        """
+        convert dict path string doted style into splited list
+        convert into int if necessary
+        """
         export_path = export_str.split(".")
         for key in range(len(export_path)):
             if re.match("[0-9]", export_path[key]):
@@ -67,7 +77,12 @@ class es_query_exporter:
             stream_handler.setLevel(logging.DEBUG)
             self.logger.addHandler(stream_handler)
 
-    def __get_label_names(self, source: dict):
+    def __get_label_names(self, source: dict) -> list:
+        """
+        parse a source occurence, 
+        return list of labels name if exists.
+        return None if not exist (unlabelled metric)
+        """
         labels = []
         for i in source:
             if "labels" in source[i] and labels == []:
@@ -78,6 +93,10 @@ class es_query_exporter:
         return list(dict.fromkeys(labels))
 
     def __create_gauge(self):
+        """
+        Parse metric in self.cfg
+        Create gauges object and store it into self.gauge_dict
+        """
         for metric in self.cfg["metrics"]:
             for metric_name, metric_param in metric.items():
                 # If there is label in metric :
@@ -105,11 +124,15 @@ class es_query_exporter:
                     )
 
     def __set_labelled_metric(self, metric_name: str, sources: dict):
+        """
+        Set labelled metrics values by reading es query results  
+        """
         for source in sources:
             for source_name, source_param in source.items():
                 export_path = self.__get_export_path(source_param["export"])
                 try:
                     self.gauge_dict[metric_name].labels(**source_param["labels"]).set(
+                        # Use list export_path to browse dict self.req_dict[source_name]
                         functools.reduce(
                             operator.getitem, export_path, self.req_dict[source_name]
                         )
@@ -122,12 +145,18 @@ class es_query_exporter:
                     pass
 
     def __set_unlabelled_metric(self, metric_name: str, source_dict: dict):
+        """
+        Set not labelled metrics values by reading es query results  
+        """
         for source_name, source_param in source_dict.items():
             export_path = self.__get_export_path(source_param["export"])
             try:
                 self.gauge_dict[metric_name].set(
                     functools.reduce(
-                        operator.getitem, export_path, self.req_dict[source_name]
+                        # Use list export_path to browse dict self.req_dict[source_name]
+                        operator.getitem,
+                        export_path,
+                        self.req_dict[source_name],
                     )
                 )
             except Exception as e:
@@ -138,6 +167,9 @@ class es_query_exporter:
                 pass
 
     def __export_metric(self):
+        """
+        Parsing whole metric config to set values from es query results
+        """
         for metric in self.cfg["metrics"]:
             for metric_name, metric_param in metric.items():
                 if len(metric_param["sources"]) > 1:
@@ -148,6 +180,9 @@ class es_query_exporter:
                     )
 
     def __proceed_es_query(self):
+        """
+        Parsing es requests config to perform requests
+        """
         for request in self.cfg["requests"]:
             for req_name, req_param in request.items():
                 self.logger.info("Proceeding query %s" % (req_name))
