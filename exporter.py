@@ -30,7 +30,7 @@ def shutdown():
 
 
 class es_query_exporter:
-    def __init__(self, config):
+    def __init__(self, config: dict):
         self.cfg = config
         self.gauge_dict = {}
         self.req_dict = {}
@@ -38,7 +38,7 @@ class es_query_exporter:
 
         self.__prepare_logs()
 
-    def __get_export_path(self, export_str):
+    def __get_export_path(self, export_str: str):
         export_path = export_str.split(".")
         for key in range(len(export_path)):
             if re.match("[0-9]", export_path[key]):
@@ -67,7 +67,7 @@ class es_query_exporter:
             stream_handler.setLevel(logging.DEBUG)
             self.logger.addHandler(stream_handler)
 
-    def __get_label_names(self, source):
+    def __get_label_names(self, source: dict):
         labels = []
         for i in source:
             if "labels" in source[i] and labels == []:
@@ -104,28 +104,38 @@ class es_query_exporter:
                         "Created unlabelled metric gauge %s" % (metric_name)
                     )
 
-    def __set_labelled_metric(self, metric_name, source_list):
+    def __set_labelled_metric(self, metric_name: str, source_list: dict):
         for source in source_list:
             for source_name, source_param in source.items():
                 export_path = self.__get_export_path(source_param["export"])
                 try:
-                    self.gauge_dict[metric_name].labels(**source_param["labels"]).set(                    
+                    self.gauge_dict[metric_name].labels(**source_param["labels"]).set(
                         functools.reduce(
                             operator.getitem, export_path, self.req_dict[source_name]
                         )
                     )
-                except KeyError as e:
-                    self.logger.error("Unable to export request. Maybe server is currently down or target do not exists")
-                    self.logger.error("    Key error  %s not found" % (e))
+                except Exception as e:
+                    self.logger.error(
+                        "Unable to export request. Maybe server is currently down or target do not exists"
+                    )
+                    self.logger.error("    Exception : %s" % (e))
+                    pass
 
-    def __set_unlabelled_metric(self, metric_name, source_dict):
+    def __set_unlabelled_metric(self, metric_name: str, source_dict: dict):
         for source_name, source_param in source_dict.items():
             export_path = self.__get_export_path(source_param["export"])
-            self.gauge_dict[metric_name].set(
-                functools.reduce(
-                    operator.getitem, export_path, self.req_dict[source_name]
+            try:
+                self.gauge_dict[metric_name].set(
+                    functools.reduce(
+                        operator.getitem, export_path, self.req_dict[source_name]
+                    )
                 )
-            )
+            except Exception as e:
+                self.logger.error(
+                    "Unable to export request. Maybe server is currently down or target do not exists"
+                )
+                self.logger.error("    Exception : %s" % (e))
+                pass
 
     def __export_metric(self):
         for metric in self.cfg["metrics"]:
@@ -133,7 +143,9 @@ class es_query_exporter:
                 if len(metric_param["sources"]) > 1:
                     self.__set_labelled_metric(metric_name, metric_param["sources"])
                 elif len(metric_param["sources"]) == 1:
-                    self.__set_unlabelled_metric(metric_name, metric_param["sources"][0])
+                    self.__set_unlabelled_metric(
+                        metric_name, metric_param["sources"][0]
+                    )
 
     def __proceed_es_query(self):
         for request in self.cfg["requests"]:
@@ -150,7 +162,9 @@ class es_query_exporter:
                     reg = re.compile(r"<(.*)(\{now\/d\{yyyy.MM.dd\}\})>")
                     cap = reg.match(req_param["index"])
                     if cap != None:
-                        index_fixed = cap.group(1) + datetime.today().strftime("%Y.%m.%d")
+                        index_fixed = cap.group(1) + datetime.today().strftime(
+                            "%Y.%m.%d"
+                        )
                         try:
                             res = getattr(es, req_param["action"])(
                                 index=index_fixed, body=req_body
