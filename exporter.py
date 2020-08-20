@@ -130,20 +130,21 @@ class es_query_exporter:
         for source in sources:
             for source_name, source_param in source.items():
                 export_path = self.__get_export_path(source_param["export"])
-                try:
+                if self.req_dict[source_name]:
                     self.gauge_dict[metric_name].labels(**source_param["labels"]).set(
                         # Use list export_path to browse dict self.req_dict[source_name]
                         functools.reduce(
                             operator.getitem, export_path, self.req_dict[source_name]
                         )
                     )
-                except Exception as e:
+                else:
                     self.logger.error(
-                        "Unable to export metric %s. Maybe server is currently down or target do not exists"
-                        % (metric_name)
+                        "Unable to export request %s. metric is set to -1"
+                        % (source_name)
                     )
-                    self.logger.error("    Exception : %s" % (e))
-                    pass
+                    self.gauge_dict[metric_name].labels(**source_param["labels"]).set(
+                        -1
+                    )
 
     def __set_unlabelled_metric(self, metric_name: str, source_dict: dict):
         """
@@ -151,7 +152,7 @@ class es_query_exporter:
         """
         for source_name, source_param in source_dict.items():
             export_path = self.__get_export_path(source_param["export"])
-            try:
+            if self.req_dict[source_name]:
                 self.gauge_dict[metric_name].set(
                     functools.reduce(
                         # Use list export_path to browse dict self.req_dict[source_name]
@@ -160,13 +161,12 @@ class es_query_exporter:
                         self.req_dict[source_name],
                     )
                 )
-            except Exception as e:
+            else:
                 self.logger.error(
-                    "Unable to export metric %s. Maybe server is currently down or target do not exists"
-                    % (metric_name)
+                    "Unable to export request %s. metric is set to -1"
+                    % (source_name)
                 )
-                self.logger.error("    Exception : %s" % (e))
-                pass
+                self.gauge_dict[metric_name].labels(**source_param["labels"]).set(-1)
 
     def __export_metric(self):
         """
@@ -207,7 +207,10 @@ class es_query_exporter:
                                 index=index_fixed, body=req_body
                             )
                         except:
-                            pass
+                            self.logger.error(
+                                "Error : Unable to proceed request %s" % (req_name)
+                            )
+                            res = False
                     pass
                 except:
                     self.logger.error(
