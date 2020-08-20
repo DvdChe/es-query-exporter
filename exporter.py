@@ -139,7 +139,8 @@ class es_query_exporter:
                     )
                 except Exception as e:
                     self.logger.error(
-                        "Unable to export request. Maybe server is currently down or target do not exists"
+                        "Unable to export metric %s. Maybe server is currently down or target do not exists"
+                        % (metric_name)
                     )
                     self.logger.error("    Exception : %s" % (e))
                     pass
@@ -161,7 +162,8 @@ class es_query_exporter:
                 )
             except Exception as e:
                 self.logger.error(
-                    "Unable to export request. Maybe server is currently down or target do not exists"
+                    "Unable to export metric %s. Maybe server is currently down or target do not exists"
+                    % (metric_name)
                 )
                 self.logger.error("    Exception : %s" % (e))
                 pass
