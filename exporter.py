@@ -152,7 +152,7 @@ class es_query_exporter:
         """
         for source_name, source_param in source_dict.items():
             export_path = self.__get_export_path(source_param["export"])
-            try :
+            try:
                 self.gauge_dict[metric_name].set(
                     functools.reduce(
                         # Use list export_path to browse dict self.req_dict[source_name]
@@ -163,8 +163,7 @@ class es_query_exporter:
                 )
             except:
                 self.logger.error(
-                    "Unable to export request %s. metric is set to -1"
-                    % (source_name)
+                    "Unable to export request %s. metric is set to -1" % (source_name)
                 )
                 self.gauge_dict[metric_name].labels(**source_param["labels"]).set(-1)
 
@@ -189,28 +188,27 @@ class es_query_exporter:
             for req_name, req_param in request.items():
                 self.logger.info("Proceeding query %s" % (req_name))
                 try:
-                    req_body = req_param["body"] if "body" in req_param else None
                     es = Elasticsearch(req_param["server"], retry_on_timeout=False)
-                    res = getattr(es, req_param["action"])(
-                        index=req_param["index"], body=req_body
-                    )
+                    res = getattr(es, req_param["action"])(**req_param["args"])
                 # if es is a shlagos out of date version lol
                 except (es_exceptions.NotFoundError):
-                    reg = re.compile(r"<(.*)(\{now\/d\{yyyy.MM.dd\}\})>")
-                    cap = reg.match(req_param["index"])
-                    if cap != None:
-                        index_fixed = cap.group(1) + datetime.today().strftime(
-                            "%Y.%m.%d"
-                        )
-                        try:
-                            res = getattr(es, req_param["action"])(
-                                index=index_fixed, body=req_body
+                    if "index" in req_param["args"].keys():
+                        reg = re.compile(r"<(.*)(\{now\/d\{yyyy.MM.dd\}\})>")
+                        cap = reg.match(req_param["args"]["index"])
+                        if cap != None:
+                            index_fixed = cap.group(1) + datetime.today().strftime(
+                                "%Y.%m.%d"
                             )
-                        except:
-                            self.logger.error(
-                                "Error : Unable to proceed request %s" % (req_name)
-                            )
-                            res = False
+                            req_param["args"]["index"] = index_fixed
+                            try:
+                                res = getattr(es, req_param["action"])(
+                                    **req_param["args"]
+                                )
+                            except:
+                                self.logger.error(
+                                    "Error : Unable to proceed request %s" % (req_name)
+                                )
+                                res = False
                     pass
                 except:
                     self.logger.error(
