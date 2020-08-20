@@ -9,6 +9,7 @@ import setproctitle
 import logging
 import functools
 import operator
+import traceback
 import re
 from pprint import pprint
 from logging.handlers import RotatingFileHandler
@@ -137,11 +138,12 @@ class es_query_exporter:
                             operator.getitem, export_path, self.req_dict[source_name]
                         )
                     )
-                except:
+                except Exception as e:
                     self.logger.error(
                         "Unable to export request %s. metric is set to -1"
                         % (source_name)
                     )
+                    self.logger.error(e)
                     self.gauge_dict[metric_name].labels(**source_param["labels"]).set(
                         -1
                     )
@@ -204,16 +206,18 @@ class es_query_exporter:
                                 res = getattr(es, req_param["action"])(
                                     **req_param["args"]
                                 )
-                            except:
+                            except Exception as e:
                                 self.logger.error(
                                     "Error : Unable to proceed request %s" % (req_name)
                                 )
+                                self.logger.error(e)
                                 res = False
                     pass
-                except:
+                except Exception as e:
                     self.logger.error(
                         "Error : Unable to proceed request %s" % (req_name)
                     )
+                    self.logger.error(e)
                     res = False
                     pass
                 self.req_dict[req_name] = res
