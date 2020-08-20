@@ -130,14 +130,14 @@ class es_query_exporter:
         for source in sources:
             for source_name, source_param in source.items():
                 export_path = self.__get_export_path(source_param["export"])
-                if self.req_dict[source_name]:
+                try:
                     self.gauge_dict[metric_name].labels(**source_param["labels"]).set(
                         # Use list export_path to browse dict self.req_dict[source_name]
                         functools.reduce(
                             operator.getitem, export_path, self.req_dict[source_name]
                         )
                     )
-                else:
+                except:
                     self.logger.error(
                         "Unable to export request %s. metric is set to -1"
                         % (source_name)
@@ -152,7 +152,7 @@ class es_query_exporter:
         """
         for source_name, source_param in source_dict.items():
             export_path = self.__get_export_path(source_param["export"])
-            if self.req_dict[source_name]:
+            try :
                 self.gauge_dict[metric_name].set(
                     functools.reduce(
                         # Use list export_path to browse dict self.req_dict[source_name]
@@ -161,7 +161,7 @@ class es_query_exporter:
                         self.req_dict[source_name],
                     )
                 )
-            else:
+            except:
                 self.logger.error(
                     "Unable to export request %s. metric is set to -1"
                     % (source_name)
