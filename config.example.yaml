@@ -5,35 +5,47 @@ exporter:
 
 requests:
   - http_requests_error_count_5xx:
-      server: "my.elk.com:9200"
-      index: "<logstash-{now/d{yyyy.MM.dd}}>"
+      server: my-es-server.tld:9200
       action: count
-      body:
-        {
-          "query": {
-            "bool": {
-              "must": [
-                  {"match": {"type": "nginx"}},
-                  {"prefix": {"nginx.status": "5"}}
-                ]
+      args:
+        index: "<logstash-{now/d{yyyy.MM.dd}}>"
+        body:
+          {
+            "query": {
+              "bool": {
+                "must": [
+                    {"match": {"type": "nginx"}},
+                    {"prefix": {"nginx.status": "5"}}
+                  ]
+              }
             }
           }
-        }
   - http_requests_error_count_4xx: 
-      server: "my.elk.com:9200"
-      index: "<logstash-{now/d{yyyy.MM.dd}}>"
+      server: my-es-server.tld:9200
       action: count
-      body:
-        {
-          "query": {
-            "bool": {
-              "must": [
-                  {"match": {"type": "nginx"}},
-                  {"prefix": {"nginx.status": "4"}}
-                ]
+      args: 
+        index: "<logstash-{now/d{yyyy.MM.dd}}>"
+        body:
+          {
+            "query": {
+              "bool": {
+                "must": [
+                    {"match": {"type": "nginx"}},
+                    {"prefix": {"nginx.status": "4"}}
+                  ]
+              }
             }
           }
-        }
+  - index_settings_index_1:
+      server: my-es-server.tld:9200
+      action: indices.get_settings
+      args:
+        index: "index-1"
+  - index_settings_index_2:
+      server: my-es-server.tld:9200
+      action: indices.get_settings
+      args:
+        index: "index-2"
 
 metrics:
   - http_requests_error_count:
@@ -42,16 +54,26 @@ metrics:
       - http_requests_error_count_5xx:
           export: count
           labels:
-            app: nginx
+            app: trantor
             status_code: 5xx
       - http_requests_error_count_4xx:
           export: count
           labels:
-            app: nginx
+            app: trantor
             status_code: 4xx
   - other_metric:
       description: test
       sources:
       - http_requests_error_count_4xx:
           export: _shards.total
-
+  - number_of_replicas:
+      description: "number of replicas"
+      sources:
+      - index_settings_index_1:
+          search: number_of_replicas          
+          labels:            
+            alias_name: my-alias
+      - index_settings_index_2:
+          search: number_of_replicas
+          labels:
+            alias_name: my-other-alias

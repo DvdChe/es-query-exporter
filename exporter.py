@@ -45,6 +45,36 @@ class es_query_exporter:
 
         self.__prepare_logs()
 
+    def __json_extract(self, obj, key):
+        """Recursively fetch values from nested JSON."""
+        arr = []
+
+        def extract(obj, arr, key):
+            """Recursively search for values of key in JSON tree."""
+            if isinstance(obj, dict):
+                for k, v in obj.items():
+                    if isinstance(v, (dict, list)):
+                        extract(v, arr, key)
+                    elif k == key:
+                        arr.append(v)
+            elif isinstance(obj, list):
+                for item in obj:
+                    extract(item, arr, key)
+            return arr
+
+        values = extract(obj, arr, key)
+        return values
+
+    def __rgetattr(self, obj, attr, *args):
+        """
+        Parsing attribute with dot in it
+        """
+
+        def get_attr(obj, attr, *args):
+            return getattr(obj, attr, *args)
+
+        return functools.reduce(get_attr, [obj] + attr.split("."))
+
     def __get_export_path(self, export_str: str) -> list:
         """
         convert dict path string doted style into splited list
@@ -80,7 +110,7 @@ class es_query_exporter:
 
     def __get_label_names(self, source: dict) -> list:
         """
-        parse a source occurence, 
+        parse a source occurence,
         return list of labels name if exists.
         return None if not exist (unlabelled metric)
         """
@@ -92,6 +122,38 @@ class es_query_exporter:
             return None
 
         return list(dict.fromkeys(labels))
+
+    def __parse_source(self, source) -> dict:
+        ret = {}
+        for source_name in source:
+            if "search" in source[source_name].keys():
+                try:
+                    value = self.__json_extract(
+                        self.req_dict[source_name], source[source_name]["search"]
+                    )
+                    ret["value"] = value[0]
+                except Exception as e:
+                    self.logger.error(
+                        "Error in parsing source ( Search ) %s : %s" % (source_name, e)
+                    )
+                    self.logger.error("    Parser will set value to -1.")
+                    ret["value"] = -1
+            elif "export" in source[source_name].keys():
+                try:
+                    export_path = self.__get_export_path(source[source_name]["export"])
+                    ret["value"] = functools.reduce(
+                        operator.getitem, export_path, self.req_dict[source_name],
+                    )
+                except Exception as e:
+                    self.logger.error(
+                        "Error in parsing source ( Export ) %s : %s" % (source_name, e)
+                    )
+                    self.logger.error("    Parser will set value to -1.")
+                    ret["value"] = -1
+
+            if "labels" in source[source_name]:
+                ret["labels"] = source[source_name]["labels"]
+        return ret
 
     def __create_gauge(self):
         """
@@ -126,48 +188,59 @@ class es_query_exporter:
 
     def __set_labelled_metric(self, metric_name: str, sources: dict):
         """
-        Set labelled metrics values by reading es query results  
+        Set labelled metrics values by reading es query results
         """
         for source in sources:
-            for source_name, source_param in source.items():
-                export_path = self.__get_export_path(source_param["export"])
-                try:
-                    self.gauge_dict[metric_name].labels(**source_param["labels"]).set(
-                        # Use list export_path to browse dict self.req_dict[source_name]
-                        functools.reduce(
-                            operator.getitem, export_path, self.req_dict[source_name]
-                        )
-                    )
-                except Exception as e:
-                    self.logger.error(
-                        "Unable to export request %s. metric is set to -1"
-                        % (source_name)
-                    )
-                    self.logger.error(e)
-                    self.gauge_dict[metric_name].labels(**source_param["labels"]).set(
-                        -1
-                    )
+            metric_param = self.__parse_source(source)
+            try:
+                self.gauge_dict[metric_name].labels(**metric_param["labels"]).set(
+                    metric_param["value"]
+                )
+                self.logger.info(
+                    "Metric %s ( %s ) updated successfully"
+                    % (metric_name, metric_param["labels"])
+                )
+            except Exception as e:
+                self.logger.error(
+                    "Unable to export metric %s. metric is set to -1" % (metric_name)
+                )
+                self.logger.error(e)
+                self.gauge_dict[metric_name].labels(**metric_param["labels"]).set(-1)
 
     def __set_unlabelled_metric(self, metric_name: str, source_dict: dict):
         """
-        Set not labelled metrics values by reading es query results  
+        Set not labelled metrics values by reading es query results
         """
-        for source_name, source_param in source_dict.items():
-            export_path = self.__get_export_path(source_param["export"])
-            try:
-                self.gauge_dict[metric_name].set(
-                    functools.reduce(
-                        # Use list export_path to browse dict self.req_dict[source_name]
-                        operator.getitem,
-                        export_path,
-                        self.req_dict[source_name],
+        # get item value from configuration
+        metric_param = self.__parse_source(source_dict)
+        try:
+            self.gauge_dict[metric_name].set(metric_param["value"])
+            self.logger.info("Metric %s updated successfully" % (metric_name))
+        except Exception as e:
+            self.logger.error(
+                "Unable to export metric %s. metric is set to -1" % (metric_name)
+            )
+            self.logger.error(e)
+            self.gauge_dict[metric_name].set(-1)
+
+    def __proceed_es_query(self):
+        """
+        Parsing es requests config to perform requests
+        """
+        for request in self.cfg["requests"]:
+            for req_name, req_param in request.items():
+                self.logger.info("Proceeding query %s" % (req_name))
+                try:
+                    es = Elasticsearch(req_param["server"], retry_on_timeout=False)
+                    res = self.__rgetattr(es, req_param["action"])(**req_param["args"])
+                except Exception as e:
+                    self.logger.error(
+                        "Error : Unable to proceed request %s" % (req_name)
                     )
-                )
-            except:
-                self.logger.error(
-                    "Unable to export request %s. metric is set to -1" % (source_name)
-                )
-                self.gauge_dict[metric_name].labels(**source_param["labels"]).set(-1)
+                    self.logger.error(e)
+                    res = False
+                    pass
+                self.req_dict[req_name] = res
 
     def __export_metric(self):
         """
@@ -181,46 +254,6 @@ class es_query_exporter:
                     self.__set_unlabelled_metric(
                         metric_name, metric_param["sources"][0]
                     )
-
-    def __proceed_es_query(self):
-        """
-        Parsing es requests config to perform requests
-        """
-        for request in self.cfg["requests"]:
-            for req_name, req_param in request.items():
-                self.logger.info("Proceeding query %s" % (req_name))
-                try:
-                    es = Elasticsearch(req_param["server"], retry_on_timeout=False)
-                    res = getattr(es, req_param["action"])(**req_param["args"])
-                # if es is a shlagos out of date version lol
-                except (es_exceptions.NotFoundError):
-                    if "index" in req_param["args"].keys():
-                        reg = re.compile(r"<(.*)(\{now\/d\{yyyy.MM.dd\}\})>")
-                        cap = reg.match(req_param["args"]["index"])
-                        if cap != None:
-                            index_fixed = cap.group(1) + datetime.today().strftime(
-                                "%Y.%m.%d"
-                            )
-                            req_param["args"]["index"] = index_fixed
-                            try:
-                                res = getattr(es, req_param["action"])(
-                                    **req_param["args"]
-                                )
-                            except Exception as e:
-                                self.logger.error(
-                                    "Error : Unable to proceed request %s" % (req_name)
-                                )
-                                self.logger.error(e)
-                                res = False
-                    pass
-                except Exception as e:
-                    self.logger.error(
-                        "Error : Unable to proceed request %s" % (req_name)
-                    )
-                    self.logger.error(e)
-                    res = False
-                    pass
-                self.req_dict[req_name] = res
 
     def __start_server(self):
         start_http_server(int(self.cfg["exporter"]["port"]))
