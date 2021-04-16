@@ -98,7 +98,10 @@ class es_query_exporter:
                 else os.path.dirname(os.path.realpath(__file__))
             )
             file_handler = RotatingFileHandler(
-                logdir + "/es-query-exporter.log", "a", 1000000, 1,
+                logdir + "/es-query-exporter.log",
+                "a",
+                1000000,
+                1,
             )
             file_handler.setLevel(logging.DEBUG)
             file_handler.setFormatter(formatter)
@@ -136,20 +139,22 @@ class es_query_exporter:
                     self.logger.error(
                         "Error in parsing source ( Search ) %s : %s" % (source_name, e)
                     )
-                    self.logger.error("    Parser will set value to -1.")
-                    ret["value"] = -1
+                    self.logger.error("    Parser will set value to NaN.")
+                    ret["value"] = "NaN"
             elif "export" in source[source_name].keys():
                 try:
                     export_path = self.__get_export_path(source[source_name]["export"])
                     ret["value"] = functools.reduce(
-                        operator.getitem, export_path, self.req_dict[source_name],
+                        operator.getitem,
+                        export_path,
+                        self.req_dict[source_name],
                     )
                 except Exception as e:
                     self.logger.error(
                         "Error in parsing source ( Export ) %s : %s" % (source_name, e)
                     )
-                    self.logger.error("    Parser will set value to -1.")
-                    ret["value"] = -1
+                    self.logger.error("    Parser will set value to NaN.")
+                    ret["value"] = "NaN"
 
             if "labels" in source[source_name]:
                 ret["labels"] = source[source_name]["labels"]
@@ -202,10 +207,10 @@ class es_query_exporter:
                 )
             except Exception as e:
                 self.logger.error(
-                    "Unable to export metric %s. metric is set to -1" % (metric_name)
+                    "Unable to export metric %s. metric is set to NaN" % (metric_name)
                 )
                 self.logger.error(e)
-                self.gauge_dict[metric_name].labels(**metric_param["labels"]).set(-1)
+                self.gauge_dict[metric_name].labels(**metric_param["labels"]).set("NaN")
 
     def __set_unlabelled_metric(self, metric_name: str, source_dict: dict):
         """
@@ -218,10 +223,10 @@ class es_query_exporter:
             self.logger.info("Metric %s updated successfully" % (metric_name))
         except Exception as e:
             self.logger.error(
-                "Unable to export metric %s. metric is set to -1" % (metric_name)
+                "Unable to export metric %s. metric is set to NaN" % (metric_name)
             )
             self.logger.error(e)
-            self.gauge_dict[metric_name].set(-1)
+            self.gauge_dict[metric_name].set("NaN")
 
     def __proceed_es_query(self):
         """
