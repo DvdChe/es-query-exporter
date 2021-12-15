@@ -98,10 +98,7 @@ class es_query_exporter:
                 else os.path.dirname(os.path.realpath(__file__))
             )
             file_handler = RotatingFileHandler(
-                logdir + "/es-query-exporter.log",
-                "a",
-                1000000,
-                1,
+                logdir + "/es-query-exporter.log", "a", 1000000, 1,
             )
             file_handler.setLevel(logging.DEBUG)
             file_handler.setFormatter(formatter)
@@ -136,23 +133,17 @@ class es_query_exporter:
                     )
                     ret["value"] = value[0]
                 except Exception as e:
-                    self.logger.error(
-                        "Error in parsing source ( Search ) %s : %s" % (source_name, e)
-                    )
+                    self.logger.error("Error in parsing source ( Search ) %s : %s" % (source_name, e))
                     self.logger.error("    Parser will set value to NaN.")
                     ret["value"] = "NaN"
             elif "export" in source[source_name].keys():
                 try:
                     export_path = self.__get_export_path(source[source_name]["export"])
                     ret["value"] = functools.reduce(
-                        operator.getitem,
-                        export_path,
-                        self.req_dict[source_name],
+                        operator.getitem, export_path, self.req_dict[source_name],
                     )
                 except Exception as e:
-                    self.logger.error(
-                        "Error in parsing source ( Export ) %s : %s" % (source_name, e)
-                    )
+                    self.logger.error("Error in parsing source ( Export ) %s : %s" % (source_name, e))
                     self.logger.error("    Parser will set value to NaN.")
                     ret["value"] = "NaN"
 

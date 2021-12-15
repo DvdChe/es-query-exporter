@@ -1,27 +1,17 @@
 exporter:
   port: 9108
+  # Time interval (sec) between actualization of request result
   refresh: 60
-  loglevel: critical
+  # Possible values are info, warning, debug.
+  loglevel: info
 
 requests:
-  - http_requests_error_count_5xx:
-      server: my-es-server.tld:9200
-      action: count
-      args:
-        index: "<logstash-{now/d{yyyy.MM.dd}}>"
-        body:
-          {
-            "query": {
-              "bool": {
-                "must": [
-                    {"match": {"type": "nginx"}},
-                    {"prefix": {"nginx.status": "5"}}
-                  ]
-              }
-            }
-          }
-  - http_requests_error_count_4xx: 
-      server: my-es-server.tld:9200
+  # At this level, each occurences below "requests" will instanciate a elasticsearch.Elasticsearch() object  
+  # Arbitrary value to identify each instances :
+  - my_awesome_request:
+      server: "my.es-server.domain.com:9200"
+      # The action value will actually call a method provided by the instance.
+      # it will call method by this way : Elasticsearch.<action>(**<args>)
       action: count
       args: 
         index: "<logstash-{now/d{yyyy.MM.dd}}>"
@@ -30,50 +20,51 @@ requests:
             "query": {
               "bool": {
                 "must": [
-                    {"match": {"type": "nginx"}},
-                    {"prefix": {"nginx.status": "4"}}
+                    {"match": {"foo": "bar"}}
                   ]
               }
             }
           }
-  - index_settings_index_1:
-      server: my-es-server.tld:9200
-      action: indices.get_settings
+
+  - my_other_awesome_request:
+  	  # If you're working on a cluster you can do this :
+      server: 
+        - "my.es-server-1.domain.com:9200"
+        - "my.es-server-2.domain.com:9200"
+        - "my.es-server-3.domain.com:9200"
+      action: count
       args:
-        index: "index-1"
-  - index_settings_index_2:
-      server: my-es-server.tld:9200
-      action: indices.get_settings
-      args:
-        index: "index-2"
+        index: "<logstash-{now/d{yyyy.MM.dd}}>"
+        body:
+          {
+            "query": {
+              "bool": {
+                "must": [
+                    {"match": {"foo": "bar"}}
+                  ]
+              }
+            }
+          }
 
 metrics:
-  - http_requests_error_count:
-      description: "amount of http errors"
-      sources: 
-      - http_requests_error_count_5xx:
-          export: count
-          labels:
-            app: trantor
-            status_code: 5xx
-      - http_requests_error_count_4xx:
-          export: count
-          labels:
-            app: trantor
-            status_code: 4xx
-  - other_metric:
-      description: test
+  - my_marvelous_metric:
+      # Description of the metric
+      description: "awesome requests here"
+      # Sources are the request created above
       sources:
-      - http_requests_error_count_4xx:
-          export: _shards.total
-  - number_of_replicas:
-      description: "number of replicas"
-      sources:
-      - index_settings_index_1:
-          search: number_of_replicas          
-          labels:            
-            alias_name: my-alias
-      - index_settings_index_2:
-          search: number_of_replicas
+      - my_awesome_request:
+          # On a _count request, there is a root key in the response containing the result: 
+          export: count
+          # You can labelize the metric by setting arbitrary key value
           labels:
-            alias_name: my-other-alias
+            spam: egg
+            foo: bar
+      - my_other_awesome_request:
+      	  # You can also access to element to export by specifying path like this
+          export: foo.1.bar.element.value
+      # !!! IMPORTANT !!! : In the same metric, you have to make sure all label keys are the same name in each time series.
+      # Otherwise, the exporter will trig an exception.
+          labels:
+            spam: hey
+            foo: peepoodo
+
